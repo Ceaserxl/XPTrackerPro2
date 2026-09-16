@@ -1,0 +1,25 @@
+## Interface: 11507
+## Title: XP Tracker Pro
+## Notes: XP per hour, kills/quests to level
+## Author: CeaserXL
+## Version: 1.5.7
+## SavedVariables: XPTrackerProDB
+
+libs\LibStub\LibStub.lua
+
+libs\CallbackHandler-1.0\CallbackHandler-1.0.xml
+libs\LibDataBroker-1.1\LibDataBroker-1.1.lua
+libs\LibDBIcon-1.0\LibDBIcon-1.0.lua
+
+libs\AceGUI-3.0\AceGUI-3.0.xml
+libs\AceAddon-3.0\AceAddon-3.0.xml
+libs\AceEvent-3.0\AceEvent-3.0.xml
+libs\AceDB-3.0\AceDB-3.0.xml
+libs\AceConsole-3.0\AceConsole-3.0.xml
+libs\AceConfig-3.0\AceConfig-3.0.xml
+libs\AceComm-3.0\AceComm-3.0.xml
+
+XPTrackerPro.lua
+config.lua
+ui_layout.lua
+ui_update.lua
