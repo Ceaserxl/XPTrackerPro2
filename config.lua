@@ -16,6 +16,11 @@ X.options = { name = "XPTrackerPro", type = "group", args = {
     scale        = { type="range", order=1, name="Frame Scale", min=0.5, max=2.0, step=0.05, get=function() return p().scale end, set=function(_,v) p().scale=v if XPTrackerPro_Frame then XPTrackerPro_Frame:SetScale(v) end end },
     resetOnLogin = { type="toggle", order=2, name="Reset Session on Login", get=function() return p().resetOnLogin end, set=function(_,v) p().resetOnLogin=v end },
     resetSession = { type="execute", order=3, name="Reset Session", confirm=true, func=function() X:ResetCache() end },
+    opacity = { type="range", order=5, name="Background Opacity", min=0.4, max=1, step=0.05, get=function() return p().opacity end, set=function(_,v) p().opacity=v X:RefreshDisplay() end },
+    locked = { type="toggle", order=6, name="Lock Window", get=function() return p().locked end, set=function(_,v) p().locked=v X:ApplyWindowSettings() end },
+    compact = { type="toggle", order=7, name="Compact View", get=function() return p().compact end, set=function(_,v) p().compact=v X:RefreshDisplay() end },
+    minimap = { type="toggle", order=8, name="Show Minimap Icon", get=function() return not p().minimap.hide end, set=function(_,v) p().minimap.hide=not v LibStub("LibDBIcon-1.0"):Refresh("XPTrackerPro", p().minimap) end },
+    position = { type="execute", order=9, name="Center Window", func=function() p().position=nil p().hidden=false X:ApplyWindowSettings() end },
   }},
 
   -- Time -----------------------------------------------------

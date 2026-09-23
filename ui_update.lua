@@ -1,296 +1,143 @@
---============================================================--
---  XPTrackerPro – UI Update (ui_update.lua)
---============================================================--
-local addon = XPTrackerPro
-local f, text, textR = XPTrackerPro_Frame, XPTrackerPro_Text, XPTrackerPro_TextR
-local normalBar, restedBar = XPTrackerPro_NormalBar, XPTrackerPro_RestedBar
-local pctText = XPTrackerPro_PctText
-local totBaseSeconds, lvlBaseSeconds, baseStamp = 0, 0, time()
-
---============================================================--
---  Played-time Hooks
---============================================================--
-addon.PlayedTimerHooks = {
-  SetSnapshot     = function(total, level) totBaseSeconds = total or 0; lvlBaseSeconds = level or 0; baseStamp = time() end,
-  ResetLevelTimer = function() lvlBaseSeconds = 0; baseStamp = time() end,
-}
-
---============================================================--
---  Helpers
---============================================================--
-local floor, min, ceil, format, abs = floor, min, ceil, format, math.abs
--- Pretty-print copper → “±Xg Ys Zc”
-local function FormatGold(c)
-    if not c or c ~= c then             -- NaN / nil guard
-        return "0g 0s 0c"
-    end
-
-    local sign = c < 0 and "-" or ""    -- preserve minus
-    local v    = math.abs(math.floor(c + 0.5))
-
-    return string.format(
-        "%s%dg %ds %dc",
-        sign,
-        math.floor(v / 1e4),            -- gold
-        math.floor(v % 1e4 / 100),      -- silver
-        v % 100                         -- copper
-    )
+-- One snapshot and one row model drive both the window and minimap tooltip.
+local X, M = XPTrackerPro, XPTrackerProMath
+local f = X.window
+local function Number(value)
+    if value == nil then return "--" end
+    return BreakUpLargeNumbers(math.floor(value + 0.5))
 end
---============================================================--
---  Section Builder – returns BOTH columns (left & right)
---============================================================--
-local DIV = "|cff555555--------------------------------|r\n"
-
--- left = labels, right = values (blank‐padded to stay in sync)
-local function BuildSectionsDual(db, p)
-  local L, R = { "\n", DIV }, { "\n\n" }   -- tables for concat
-  local rows = 0
-
-  -- helpers --------------------------------------------------
-  local function addPair(label, value)
-    L[#L+1] = label .. "\n"
-    R[#R+1] = value .. "\n"
-    rows = rows + 1
-  end
-  local function open(title)
-    L[#L+1] = "|cffffcc00" .. title .. ":|r\n"
-    R[#R+1] = "\n"              -- title spacer on right
-    rows = 0
-  end
-  local function close()
-    if rows > 0 then            -- print divider once per section
-      L[#L+1] = DIV
-      R[#R+1] = "\n"
+function X:BuildRows(s, compact)
+    local p, rows = self.db.profile, {}
+    local function section(title, enabled, entries)
+        if enabled == false then return end
+        local visible = {}
+        for _, entry in ipairs(entries) do
+            if p[entry[1]] then visible[#visible + 1] = entry end
+        end
+        if #visible == 0 then return end
+        rows[#rows + 1] = { title = title }
+        for _, entry in ipairs(visible) do
+            rows[#rows + 1] = { label = entry[2], value = entry[3], tip = entry[4] }
+        end
     end
-  end
-
-  --============== Time ======================================
-  if db.enableTimeSection ~= false then
-    open("Time Details")
-    if db.showSessionTime  then addPair("Session Time:",   addon:FormatTime(p.session)) end
-    if db.showLevelTime    then addPair("Time This Level:", addon:FormatTime(p.playLvl)) end
-    if db.showTotalPlayed  then addPair("Total Played:",   addon:FormatTime(p.playTot)) end
-    close()
-  end
-
-  --============== XP ========================================
-  if db.enableXPSection ~= false then
-    open("XP Details")
-    if db.showXPGained   then addPair("XP Gained:",    p.xpGained) end
-    if db.showXPPerHour  then addPair("XP per Hour:",  format("%.0f", p.xpPerHr)) end
-    if db.showAvgKillXP  then addPair("Avg Kill XP:",  p.avgKillXP and format("%.1f", p.avgKillXP) or "N/A") end
-    if db.showAvgQuestXP then addPair("Avg Quest XP:", p.avgQuestXP and format("%.1f", p.avgQuestXP) or "N/A") end
-    if db.showRestedXP   then
-      local restedPercent = p.maxXP > 0 and (p.restedXP / p.maxXP) * 100 or 0
-      addPair("Rested XP:", format("%d (%.0f%%)", p.restedXP, restedPercent))
+    if compact then
+        section("SESSION", true, {
+            { "showXPPerHour", "XP / hour", Number(s.xpPerHr), "All XP sources divided by online session time." },
+            { "showTimeToLevel", "Time to level", M.Time(s.t2lvl), "Estimate at the current session XP rate." },
+            { "showSessionTime", "Session time", M.Time(s.session), "Online time only; includes time while standing still." },
+        })
+        -- Honor parent section switches even in compact view.
+        for i = #rows, 1, -1 do
+            local label = rows[i].label
+            if (label == "XP / hour" and not p.enableXPSection)
+                or (label == "Time to level" and not p.enableXToSection)
+                or (label == "Session time" and not p.enableTimeSection) then table.remove(rows, i) end
+        end
+        if #rows == 1 then rows = {} end
+        return rows
     end
-    close()
-  end
-
-  --============== X-To ======================================
-  if db.enableXToSection ~= false then
-    open("X-To Details")
-    if db.showKillsToLevel  then addPair("Kills to Level:",  p.killEst)  end
-    if db.showQuestsToLevel then addPair("Quests to Level:", p.questEst) end
-    if db.showTimeToLevel  then addPair("Time to Level:",  p.t2lvl) end
-    close()
-  end
-
-  --============== Gold ======================================
-  if db.enableGoldSection ~= false then
-    open("Gold Details")
-    if db.showGoldEarned  then addPair("Gold Net:",  FormatGold(p.goldNet))  end
-    if db.showGoldPerHour then addPair("Gold/Hour:", FormatGold(p.goldPerHr)) end
-    close()
-  end
-
-  return table.concat(L), table.concat(R)
+    section("EXPERIENCE", p.enableXPSection, {
+        { "showXPGained", "XP gained", Number(s.xpGained), "Actual XP bar gains, including quests, kills, and exploration. Rewards are counted once." },
+        { "showXPPerHour", "XP / hour", Number(s.xpPerHr), "Total session XP / online session seconds x 3,600." },
+        { "showAvgKillXP", "Avg. kill XP", s.avgKillXP and string.format("%.1f", s.avgKillXP) or "--",
+            "Average of the latest " .. s.killSamples .. " kills (up to 10). Includes awarded bonuses; quest XP is excluded." },
+        { "showAvgQuestXP", "Avg. quest XP", s.avgQuestXP and string.format("%.1f", s.avgQuestXP) or "--",
+            "Average of the latest " .. s.questSamples .. " quests with an XP reward (up to 10)." },
+        { "showRestedXP", "Rested XP", Number(s.restedXP),
+            "Stored rested XP: " .. string.format("%.1f%%", s.maxXP > 0 and s.restedXP / s.maxXP * 100 or 0) .. " of the current level." },
+    })
+    section("NEXT LEVEL", p.enableXToSection, {
+        { "showTimeToLevel", "Time to level", M.Time(s.t2lvl), "Estimate at the session XP rate. Changes as your pace changes." },
+        { "showKillsToLevel", "Kills remaining", Number(s.killEst), "Remaining XP / recent average kill XP, rounded up. Assumes similar kills and bonuses." },
+        { "showQuestsToLevel", "Quests remaining", Number(s.questEst), "Remaining XP / recent average quest XP, rounded up. Quest rewards vary." },
+    })
+    section("TIME", p.enableTimeSection, {
+        { "showSessionTime", "Session", M.Time(s.session), "Online time in this tracked session. Persists through reloads unless reset-on-login is enabled." },
+        { "showLevelTime", "This level", M.Time(s.playLvl), "Played time at this level. Waiting for /played data is shown as --." },
+        { "showTotalPlayed", "Total played", M.Time(s.playTot), "Lifetime played time reported by the game." },
+    })
+    section("GOLD", p.enableGoldSection, {
+        { "showGoldEarned", "Net gold", M.Gold(s.goldNet), "Money received minus money spent. Includes trading, mail, repairs, and purchases." },
+        { "showGoldPerHour", "Net gold / hour", M.Gold(s.goldPerHr), "Net gold / online session seconds x 3,600. Can be negative." },
+    })
+    return rows
 end
 
-
---============================================================--
---  Display Update
---============================================================--
-local function UpdateDisplay()
-  --------------------------------------------------------------
-  --  Early-out if SavedVariables aren’t ready
-  --------------------------------------------------------------
-  local db = addon.db and addon.db.profile
-  if not db then return end
-
-  --------------------------------------------------------------
-  --  Static widgets
-  --------------------------------------------------------------
-  f:SetScale(db.scale or 1.0)
-  normalBar:SetShown(db.showNormal)
-  restedBar:SetShown(db.showRested)
-
-  --------------------------------------------------------------
-  --  XP bars
-  --------------------------------------------------------------
-  local curXP, maxXP   = UnitXP("player"), UnitXPMax("player")
-  local restedXP       = GetXPExhaustion() or 0
-  if maxXP > 0 then
-    normalBar:SetMinMaxValues(0, maxXP)
-    normalBar:SetValue(curXP)
-    restedBar:SetMinMaxValues(0, maxXP)
-    restedBar:SetValue(math.min(curXP + restedXP, maxXP))
-    pctText:SetText(format("%.0f%% (%d left)", curXP / maxXP * 100, maxXP - curXP))
-  else
-    normalBar:SetMinMaxValues(0, 1)
-    normalBar:SetValue(1)
-    restedBar:SetMinMaxValues(0, 1)
-    restedBar:SetValue(0)
-    pctText:SetText("Level cap")
-  end
-
-  --------------------------------------------------------------
-  --  Time calculations
-  --------------------------------------------------------------
-  local now      = time()
-  local delta    = now - (XPTrackerPro_LastCacheUpdate or now)
-  local session  = (XPTrackerPro_TotalSessionTime or 0) + delta
-
-  local elapsed      = now - baseStamp                     -- time this login
-  local playTot      = totBaseSeconds + elapsed            -- total /played
-  local playLvl      = lvlBaseSeconds + elapsed            -- time this level
-
-  --------------------------------------------------------------
-  --  XP rates & estimates
-  --------------------------------------------------------------
-  local xpGained = XPTrackerPro_SessionXPGained or 0
-  local xpPerHr  = session > 0 and (xpGained / (session / 3600)) or 0
-
-  local remainXP = maxXP - curXP
-  local t2lvl    = (xpPerHr > 0) and addon:FormatTime((remainXP / xpPerHr) * 3600) or "N/A"
-
-  local killAvg  = addon:RollingAverage(XPTrackerPro_KillXP)  or XPTrackerPro_FirstKillXP
-  local questAvg = addon:RollingAverage(XPTrackerPro_QuestXP) or XPTrackerPro_FirstQuestXP
-  local killEst  = killAvg  and math.ceil(remainXP / killAvg)   or "N/A"
-  local questEst = questAvg and math.ceil(remainXP / questAvg)  or "N/A"
-
-  --------------------------------------------------------------
-  --  Gold tracking
-  --------------------------------------------------------------
-  local currentMoney        = GetMoney()
-  XPTrackerPro_GoldEarned   = currentMoney - (XPTrackerPro_GoldStart or currentMoney)
-  local goldPerHr           = session > 0 and (XPTrackerPro_GoldEarned / (session / 3600)) or 0
-
-  --------------------------------------------------------------
-  --  Build info block & display
-  --------------------------------------------------------------
-  local data = {
-    -- Time
-    session   = session,
-    playTot   = playTot,
-    playLvl   = playLvl,
-    t2lvl     = t2lvl,
-    -- XP
-    xpGained  = xpGained,
-    xpPerHr   = xpPerHr,
-    killEst   = killEst,
-    questEst  = questEst,
-    avgKillXP = killAvg,
-    avgQuestXP= questAvg,
-    restedXP  = restedXP,
-    maxXP     = maxXP,
-    -- Gold
-    goldNet   = XPTrackerPro_GoldEarned,
-    goldPerHr = goldPerHr,
-  }
-  local textBlock, textBlockR = BuildSectionsDual(db, data)
-  text:SetText(textBlock)
-  textR:SetText(textBlockR)
-  f:SetHeight(text:GetStringHeight() + 45)
+function X:RefreshDisplay()
+    if not self.db or not self.started then return end
+    local p, s = self.db.profile, self:GetSnapshot()
+    f:SetWidth(self.WINDOW_WIDTH)
+    f:SetScale(p.scale)
+    f:SetBackdropColor(0.055, 0.064, 0.078, p.opacity)
+    f.level:SetText("Level " .. s.level)
+    f.progress:SetText(s.capped and "MAX LEVEL" or string.format("%.1f%%", s.maxXP > 0 and s.curXP / s.maxXP * 100 or 0))
+    f.remaining:SetText(s.capped and "Level cap reached" or Number(s.remainXP) .. " XP to next level")
+    f.subtitle:SetText(p.compact and "SESSION AT A GLANCE" or "LEVELING OVERVIEW")
+    f.status:SetText(p.locked and "LOCKED" or "DRAG HEADER")
+    f.collapse.label:SetText(p.compact and "+" or "-")
+    local maximum = math.max(1, s.maxXP)
+    f.normalBar:SetMinMaxValues(0, maximum)
+    f.restedBar:SetMinMaxValues(0, maximum)
+    f.normalBar:SetValue(s.capped and maximum or s.curXP)
+    f.restedBar:SetValue(s.capped and 0 or math.min(maximum, s.curXP + s.restedXP))
+    f.normalBar:SetShown(p.showNormal)
+    f.restedBar:SetShown(p.showRested and not s.capped)
+    f.track:SetShown(p.showNormal or p.showRested)
+    local rows = self:BuildRows(s, p.compact)
+    local y = 119
+    for index, data in ipairs(rows) do
+        local row = self:GetDisplayRow(index)
+        row:ClearAllPoints()
+        row:SetPoint("TOPLEFT", f, "TOPLEFT", 8, -y)
+        row:SetPoint("TOPRIGHT", f, "TOPRIGHT", -8, -y)
+        row.tip = data.tip
+        row.left:SetText(data.title or data.label)
+        row.right:SetText(data.value or "")
+        if data.title then
+            row.left:SetTextColor(0.83, 0.70, 0.43)
+            row.background:Hide()
+            row:SetHeight(23)
+            y = y + 23
+        else
+            row.left:SetTextColor(0.67, 0.70, 0.75)
+            row.right:SetTextColor(0.93, 0.93, 0.92)
+            row.background:SetShown(index % 2 == 0)
+            row:SetHeight(20)
+            y = y + 20
+        end
+        row:Show()
+    end
+    for index = #rows + 1, #f.rows do f.rows[index]:Hide() end
+    f:SetHeight(y + 28)
+    if self.broker then self.broker.text = Number(s.xpPerHr) .. " XP/h" end
 end
 
---============================================================--
---  Bind to OnUpdate
---============================================================--
-local updateElapsed = 0
+local elapsedTotal = 0
 f:SetScript("OnUpdate", function(_, elapsed)
-  updateElapsed = updateElapsed + elapsed
-  if updateElapsed < 0.2 then return end
-  updateElapsed = 0
-  UpdateDisplay()
+    elapsedTotal = elapsedTotal + elapsed
+    if elapsedTotal >= 0.25 then elapsedTotal = 0; X:RefreshDisplay() end
 end)
+f:SetScript("OnShow", function() X:RefreshDisplay() end)
 
---============================================================--
---  Minimap Icon (LibDataBroker + LibDBIcon) – live data feed
---============================================================--
-function addon:InitializeMinimap()
-    if self.minimapInitialized then return end
-
-    local LDB  = LibStub("LibDataBroker-1.1")
-    local LDBI = LibStub("LibDBIcon-1.0")
-
-    -- helper: rebuild the data table exactly like UpdateDisplay does
-    local function BuildSnapshot()
-        local now   = time()
-        local delta = now - (XPTrackerPro_LastCacheUpdate or now)
-        local sess  = (XPTrackerPro_TotalSessionTime or 0) + delta
-
-        local curXP,maxXP = UnitXP("player"), UnitXPMax("player")
-        local restXP      = GetXPExhaustion() or 0
-        local xpGain      = XPTrackerPro_SessionXPGained or 0
-        local xpHr        = sess>0 and (xpGain/(sess/3600)) or 0
-        local remain      = maxXP - curXP
-        local t2lvl       = (xpHr>0) and addon:FormatTime((remain/xpHr)*3600) or "N/A"
-
-        local kAvg = addon:RollingAverage(XPTrackerPro_KillXP)  or XPTrackerPro_FirstKillXP
-        local qAvg = addon:RollingAverage(XPTrackerPro_QuestXP) or XPTrackerPro_FirstQuestXP
-        local kEst = kAvg and ceil(remain/kAvg) or "N/A"
-        local qEst = qAvg and ceil(remain/qAvg) or "N/A"
-
-        local moneyNow = GetMoney()
-        local goldNet  = moneyNow - (XPTrackerPro_GoldStart or moneyNow)
-        local goldHr   = sess>0 and (goldNet/(sess/3600)) or 0
-
-        return {
-            -- time
-            session=sess, playTot=totBaseSeconds+now-baseStamp,
-            playLvl=lvlBaseSeconds+now-baseStamp, t2lvl=t2lvl,
-            -- xp
-            xpGained=xpGain, xpPerHr=xpHr, killEst=kEst, questEst=qEst,
-            avgKillXP=kAvg, avgQuestXP=qAvg, restedXP=restXP, maxXP=maxXP,
-            -- gold
-            goldNet=goldNet, goldPerHr=goldHr,
-        }
-    end
-
-    local obj = LDB:NewDataObject("XPTrackerPro", {
-        type  = "data source",
-        icon  = "Interface\\AddOns\\XPTrackerPro\\media\\xptracker_icon_64.tga",
-        label = "XPTrackerPro",
-        text  = "XP",
-        OnClick = function(_,btn)
-            if btn=="LeftButton" then XPTrackerPro_Frame:SetShown(not XPTrackerPro_Frame:IsShown())
-            else
-                addon:OpenSettings()
-            end
+function X:InitializeMinimap()
+    local icon = LibStub("LibDBIcon-1.0")
+    self.broker = LibStub("LibDataBroker-1.1"):NewDataObject("XPTrackerPro", {
+        type = "data source", label = "XP Tracker Pro", text = "XP",
+        icon = "Interface\\AddOns\\XPTrackerPro\\media\\xptracker_icon_64.tga",
+        OnClick = function(_, button)
+            if button == "LeftButton" then X:ToggleWindow() else X:OpenSettings() end
         end,
-        OnTooltipShow = function(tt)
-            tt:AddLine("XPTrackerPro",1,1,1); tt:AddLine(" ")
-
-            local db = addon.db and addon.db.profile or {}
-            local left,right = BuildSectionsDual(db, BuildSnapshot())
-
-            -- print each line pair neatly
-            local lLines = {strsplit("\n",left)}
-            local rLines = {strsplit("\n",right)}
-            for i=1,math.max(#lLines,#rLines) do
-                local l = lLines[i] or ""
-                local r = rLines[i] or ""
-                if l ~= "" then
-                    if r ~= "" then  tt:AddDoubleLine(l,r)
-                    else             tt:AddLine(l)  end
-                end
+        OnTooltipShow = function(tooltip)
+            tooltip:AddLine("XP Tracker Pro", 0.83, 0.70, 0.43)
+            if not X.started then return end
+            for _, row in ipairs(X:BuildRows(X:GetSnapshot(), false)) do
+                if row.title then
+                    tooltip:AddLine(" ")
+                    tooltip:AddLine(row.title, 0.83, 0.70, 0.43)
+                else tooltip:AddDoubleLine(row.label, row.value, 0.7, 0.72, 0.76, 1, 1, 1) end
             end
-            tt:AddLine(" ")
-            tt:AddLine("|cffffff00Left-Click|r toggle window")
-            tt:AddLine("|cffffff00Right-Click|r settings")
+            tooltip:AddLine(" ")
+            tooltip:AddLine("Left-click: toggle   Right-click: settings", 0.65, 0.65, 0.65)
         end,
     })
-    LDBI:Register("XPTrackerPro", obj, addon.db.profile.minimap)
-    self.minimapInitialized = true
+    icon:Register("XPTrackerPro", self.broker, self.db.profile.minimap)
 end

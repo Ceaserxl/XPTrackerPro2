@@ -1,107 +1,151 @@
---============================================================--
---  XPTrackerPro – Compact Header / Body / Footer Layout
---============================================================--
-
----------------------
---  FRAME SHELL
----------------------
-local f = CreateFrame("Frame","XPTrackerPro_Frame",UIParent,"BackdropTemplate")
-_G.XPTrackerPro_Frame = f
-f:SetWidth(160)                     -- width locked
+-- Blizzard-inspired charcoal panels, restrained gold trim, and native fonts.
+local X = XPTrackerPro
+X.WINDOW_WIDTH = 280
+local f = CreateFrame("Frame", "XPTrackerPro_Frame", UIParent, "BackdropTemplate")
+X.window = f
+f:SetSize(X.WINDOW_WIDTH, 480)
 f:SetPoint("CENTER")
-f:SetMovable(true) f:EnableMouse(true) f:SetClampedToScreen(true)
-f:SetScript("OnMouseDown",f.StartMoving)
-f:SetScript("OnMouseUp",  f.StopMovingOrSizing)
+f:SetFrameStrata("MEDIUM")
+f:SetClampedToScreen(true)
+f:SetMovable(true)
+f:EnableMouse(true)
+f:SetBackdrop({
+    bgFile = "Interface\\Buttons\\WHITE8x8",
+    edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+    tile = false, edgeSize = 12,
+    insets = { left = 3, right = 3, top = 3, bottom = 3 },
+})
+f:SetBackdropBorderColor(0.48, 0.42, 0.29, 1)
 f:Hide()
 
-f:SetBackdrop({
-  bgFile   = "Interface\\Buttons\\WHITE8x8",
-  edgeFile = "Interface\\Buttons\\WHITE8x8",
-  edgeSize = 1,
-})
-f:SetBackdropColor(0.04, 0.04, 0.07, 0.75)
-f:SetBackdropBorderColor(0.7, 0.7, 1, 0.20)
-
----------------------
---  HEADER BAR
----------------------
-local header = CreateFrame("Frame",nil,f,"BackdropTemplate")
-header:SetPoint("TOPLEFT",1,-1)
-header:SetPoint("TOPRIGHT",-1,-1)
-header:SetHeight(22)
-header:SetBackdrop({bgFile="Interface\\Buttons\\WHITE8x8"})
-header:SetBackdropColor(0.10, 0.10, 0.18, 0.70)
-
--- title
-local title = header:CreateFontString(nil,"OVERLAY","GameFontNormalSmall")
-title:SetPoint("CENTER",0,0)
-title:SetText("|cffffd200XP Tracker Pro|r")
-
--- cog
-local cog = CreateFrame("Button",nil,header)
-cog:SetSize(18,18) cog:SetPoint("RIGHT",-4,0)
-cog:SetNormalTexture("Interface\\Buttons\\UI-OptionsButton")
-cog:SetPushedTexture("Interface\\Buttons\\UI-OptionsButton-Down")
-cog:SetHighlightTexture("Interface\\Buttons\\UI-Common-MouseHilight","ADD")
-cog:SetScript("OnEnter",function() GameTooltip:SetOwner(cog,"ANCHOR_RIGHT") GameTooltip:SetText("Open Settings") end)
-cog:SetScript("OnLeave",GameTooltip_Hide)
-cog:SetScript("OnClick",function()
-  XPTrackerPro:OpenSettings()
+local function Label(parent, font, anchor, relative, x, y, size)
+    local text = parent:CreateFontString(nil, "OVERLAY", font)
+    local face, _, flags = text:GetFont()
+    text:SetFont(face, size or 13, flags)
+    text:SetPoint(anchor, relative or parent, anchor, x, y)
+    text:SetJustifyH("LEFT")
+    return text
+end
+local function Fill(parent, r, g, b, a)
+    local texture = parent:CreateTexture(nil, "BACKGROUND")
+    texture:SetAllPoints()
+    texture:SetColorTexture(r, g, b, a)
+    return texture
+end
+local header = CreateFrame("Frame", nil, f)
+header:SetPoint("TOPLEFT", 7, -7)
+header:SetPoint("TOPRIGHT", -7, -7)
+header:SetHeight(38)
+Fill(header, 0.13, 0.14, 0.16, 1)
+header:EnableMouse(true)
+header:RegisterForDrag("LeftButton")
+header:SetScript("OnDragStart", function()
+    if not X.db.profile.locked then f:StartMoving() end
+end)
+header:SetScript("OnDragStop", function()
+    f:StopMovingOrSizing()
+    local point, _, relativePoint, x, y = f:GetPoint()
+    X.db.profile.position = { point = point, relativePoint = relativePoint, x = x, y = y }
+end)
+f.title = Label(header, "GameFontNormal", "TOPLEFT", nil, 8, -5, 14)
+f.title:SetText("XP TRACKER |cffddddddPRO|r")
+f.subtitle = Label(header, "GameFontHighlightSmall", "BOTTOMLEFT", nil, 8, 5, 11)
+f.subtitle:SetTextColor(0.64, 0.67, 0.72)
+f.subtitle:SetText("LEVELING OVERVIEW")
+local function Button(text, offset, tooltip, action)
+    local button = CreateFrame("Button", nil, header)
+    button:SetSize(23, 28)
+    button:SetPoint("TOPRIGHT", offset, -5)
+    local label = button:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    button.label = label
+    label:SetAllPoints()
+    label:SetText(text)
+    button:SetHighlightTexture("Interface\\Buttons\\WHITE8x8")
+    button:GetHighlightTexture():SetVertexColor(1, 0.85, 0.5, 0.12)
+    button:SetScript("OnClick", action)
+    button:SetScript("OnEnter", function()
+        GameTooltip:SetOwner(button, "ANCHOR_RIGHT")
+        GameTooltip:SetText(tooltip)
+        GameTooltip:Show()
+    end)
+    button:SetScript("OnLeave", function() GameTooltip:Hide() end)
+    return button
+end
+Button("x", -2, "Hide window\n/xtp or minimap left-click to show", function() X:ToggleWindow() end)
+local settingsButton = Button("", -27, "Open settings", function() X:OpenSettings() end)
+local settingsIcon = settingsButton:CreateTexture(nil, "ARTWORK")
+settingsIcon:SetSize(18, 18)
+settingsIcon:SetPoint("CENTER")
+settingsIcon:SetTexture("Interface\\Buttons\\UI-OptionsButton")
+f.collapse = Button("-", -52, "Toggle compact view", function()
+    X.db.profile.compact = not X.db.profile.compact
+    X:RefreshDisplay()
 end)
 
----------------------
---  BODY
----------------------
-local text  = f:CreateFontString(nil,"OVERLAY","GameFontHighlightSmall"); _G.XPTrackerPro_Text  = text
-text:SetPoint("TOPLEFT",10,-15) text:SetWidth(230) text:SetJustifyH("LEFT")
+f.level = Label(f, "GameFontNormalLarge", "TOPLEFT", nil, 12, -54, 18)
+f.progress = Label(f, "GameFontHighlightSmall", "TOPRIGHT", nil, -12, -57)
+f.progress:SetJustifyH("RIGHT")
+local track = CreateFrame("Frame", nil, f, "BackdropTemplate")
+track:SetPoint("TOPLEFT", 12, -78)
+track:SetPoint("TOPRIGHT", -12, -78)
+track:SetHeight(16)
+track:SetBackdrop({ bgFile = "Interface\\Buttons\\WHITE8x8" })
+track:SetBackdropColor(0.025, 0.028, 0.04, 1)
+f.track = track
+local function Bar(r, g, b, level)
+    local bar = CreateFrame("StatusBar", nil, track)
+    bar:SetPoint("TOPLEFT", 1, -1)
+    bar:SetPoint("BOTTOMRIGHT", -1, 1)
+    bar:SetStatusBarTexture("Interface\\TargetingFrame\\UI-StatusBar")
+    bar:SetStatusBarColor(r, g, b)
+    bar:SetFrameLevel(track:GetFrameLevel() + level)
+    return bar
+end
+f.restedBar = Bar(0.17, 0.48, 0.73, 1)
+f.normalBar = Bar(0.50, 0.32, 0.76, 2)
+_G.XPTrackerPro_NormalBar, _G.XPTrackerPro_RestedBar = f.normalBar, f.restedBar
+f.remaining = Label(f, "GameFontHighlightSmall", "TOPLEFT", nil, 12, -99)
+f.remaining:SetTextColor(0.64, 0.67, 0.72)
+f.footer = Label(f, "GameFontDisableSmall", "BOTTOMLEFT", nil, 12, 10, 11)
+f.footer:SetText("CeaserXL")
+f.status = Label(f, "GameFontDisableSmall", "BOTTOMRIGHT", nil, -12, 10, 11)
+f.status:SetJustifyH("RIGHT")
+f.rows = {}
 
-local textR = f:CreateFontString(nil,"OVERLAY","GameFontHighlightSmall"); _G.XPTrackerPro_TextR = textR
-textR:SetPoint("TOPRIGHT",-10,-15) textR:SetWidth(230) textR:SetJustifyH("RIGHT")
+function X:GetDisplayRow(index)
+    if f.rows[index] then return f.rows[index] end
+    local row = CreateFrame("Frame", nil, f)
+    row:SetHeight(20)
+    row.left = Label(row, "GameFontHighlightSmall", "LEFT", nil, 4, 0)
+    row.left:SetWidth(116)
+    row.left:SetWordWrap(false)
+    row.right = Label(row, "GameFontHighlightSmall", "RIGHT", nil, -4, 0)
+    row.right:SetJustifyH("RIGHT")
+    row.right:SetWidth(128)
+    row.right:SetWordWrap(false)
+    row.background = Fill(row, 1, 1, 1, 0.025)
+    row:EnableMouse(true)
+    row:SetScript("OnEnter", function()
+        if not row.tip then return end
+        GameTooltip:SetOwner(row, "ANCHOR_RIGHT")
+        GameTooltip:SetText(row.tip, 1, 1, 1, 1, true)
+        GameTooltip:Show()
+    end)
+    row:SetScript("OnLeave", function() GameTooltip:Hide() end)
+    f.rows[index] = row
+    return row
+end
 
----------------------
---  FOOTER
----------------------
-local credit = f:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-local getMetadata = C_AddOns and C_AddOns.GetAddOnMetadata or GetAddOnMetadata
-local version = getMetadata and getMetadata("XPTrackerPro", "Version") or "1.6.0"
-credit:SetText("v" .. version .. " - CeaserXL")
-credit:SetAlpha(0.75)
-credit:SetPoint("BOTTOM",0,20)
-
-----------------------------------------------------------------
---  FANCY XP BAR
-----------------------------------------------------------------
-local BAR_H = 14          -- a hair taller for the new art
-
--- container ---------------------------------------------------
-local bar = CreateFrame("Frame", nil, f, "BackdropTemplate")
-_G.XPTrackerPro_BarBorder = bar
-bar:SetPoint("BOTTOMLEFT", 4, 4)
-bar:SetPoint("BOTTOMRIGHT", -4, 4)
-bar:SetHeight(BAR_H)
-bar:SetBackdrop({
-    bgFile   = "Interface\\Buttons\\WHITE8x8",
-    edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
-    edgeSize = 6,
-})
-bar:SetBackdropColor(0, 0, 0, 0.40)
-bar:SetBackdropBorderColor(0.3, 0.3, 0.45, 0.30)
-
--- normal bar (over) ------------------------------------------
-local normal = CreateFrame("StatusBar", nil, bar)
-_G.XPTrackerPro_NormalBar = normal
-normal:SetAllPoints()
-normal:SetStatusBarTexture("Interface\\TARGETINGFRAME\\UI-StatusBar")
-normal:SetStatusBarColor(0.60, 0.30, 0.95, 1.00)   -- purple
-
--- rested bar (under) -----------------------------------------
-local rested = CreateFrame("StatusBar", nil, bar)
-_G.XPTrackerPro_RestedBar = rested
-rested:SetAllPoints()
-rested:SetStatusBarTexture("Interface\\TARGETINGFRAME\\UI-StatusBar")
-rested:SetStatusBarColor(0.00, 0.65, 1.00, 0.80)   -- cyan-blue
-
--- percent text -----------------------------------------------
-local pct = normal:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-_G.XPTrackerPro_PctText = pct
-pct:SetPoint("CENTER")
+function X:ApplyWindowSettings()
+    if not self.db then return end
+    local p = self.db.profile
+    f:SetWidth(self.WINDOW_WIDTH)
+    f:SetScale(p.scale)
+    f:SetBackdropColor(0.055, 0.064, 0.078, p.opacity)
+    f:ClearAllPoints()
+    if p.position then
+        f:SetPoint(p.position.point, UIParent, p.position.relativePoint, p.position.x, p.position.y)
+    else f:SetPoint("CENTER") end
+    f:SetShown(not p.hidden)
+    self:RefreshDisplay()
+end
