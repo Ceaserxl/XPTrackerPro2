@@ -14,7 +14,9 @@ local defaults = {
         scale            = 1.0,
         showNormal       = true,
         showRested       = true,
+        minimap          = { hide = false },
         -- Time
+        enableTimeSection= true,
         showSessionTime  = true,
         showLevelTime    = true,
         showTotalPlayed  = true,
@@ -28,6 +30,7 @@ local defaults = {
         showRestedXP     = true,
         showAvgKillXP    = true,
         showAvgQuestXP   = true,
+        enableXToSection = true,
         -- Gold
         enableGoldSection= true,
         showGoldEarned   = true,
@@ -58,7 +61,7 @@ XPTrackerPro_ForceTimeDisplay   = false -- force timer visibility flag
 XPTrackerPro_GoldStart          = 0      -- copper at login
 XPTrackerPro_GoldEarned         = 0      -- copper earned this session
 -- Internal helpers
-local initialized, playedFetched = false, false
+local initialized                 = false
 local maxHistory                 = 10
 local floor, format, time        = floor, format, time
 
@@ -74,7 +77,10 @@ function XPTrackerPro:RollingAverage(tbl)
   return (#tbl > 0) and (sum/#tbl) or nil
 end
 
-local function CharKey() return UnitName("player").."-"..GetRealmName() end
+local function CharKey()
+  local name, realm = UnitFullName("player")
+  return format("%s-%s", name or UnitName("player") or "Unknown", realm or GetRealmName() or "Unknown")
+end
 
 --============================================================--
 --  Cache Handling
@@ -93,6 +99,8 @@ function XPTrackerPro:RestoreCache()
 end
 
 function XPTrackerPro:UpdateCache()
+  if not self.db then return end
+
   local now = time()
   XPTrackerPro_LastCacheUpdate = XPTrackerPro_LastCacheUpdate or now
   local delta = now - XPTrackerPro_LastCacheUpdate
@@ -132,7 +140,7 @@ function XPTrackerPro:ResetCache()
     XPTrackerPro_LevelPlayedAtLogin = 0
     XPTrackerPro_ForceTimeDisplay   = true
     -- Flags / queries
-    playedFetched = false
+    XPTrackerPro_LastCacheUpdate    = time()
     RequestTimePlayed()
     -- Feedback
     self:Print("|cffff4444Session reset.|r")
@@ -145,6 +153,7 @@ function XPTrackerPro:OnInitialize()
   self.db = LibStub("AceDB-3.0"):New("XPTrackerProDB", defaults, true)
   self:RegisterChatCommand("xtp", "SlashHandler")
   self:RestoreCache()
+  if self.InitializeMinimap then self:InitializeMinimap() end
 end
 
 function XPTrackerPro:OnEnable()
@@ -155,6 +164,7 @@ function XPTrackerPro:OnEnable()
   self:RegisterEvent("CHAT_MSG_COMBAT_XP_GAIN")
   self:RegisterEvent("QUEST_TURNED_IN")
   self:RegisterEvent("PLAYER_MONEY")
+  self:RegisterEvent("PLAYER_LOGOUT")
 end
 
 --============================================================--
@@ -172,7 +182,7 @@ function XPTrackerPro:PLAYER_ENTERING_WORLD()
   XPTrackerPro_GoldStart = XPTrackerPro_GoldStart or GetMoney()
   XPTrackerPro_GoldEarned = XPTrackerPro_GoldEarned or 0
   if XPTrackerPro_Frame then XPTrackerPro_Frame:Show() end
-  playedFetched = false; RequestTimePlayed()
+  RequestTimePlayed()
   self:Print("|cff00ff00XPTrackerPro loaded. /xtp to toggle, /xtp reset to clear.|r")
 end
 
@@ -184,21 +194,27 @@ end
 
 function XPTrackerPro:PLAYER_LEVEL_UP() 
   XPTrackerPro_ForceTimeDisplay = true
+  if self.PlayedTimerHooks then self.PlayedTimerHooks.ResetLevelTimer() end
   RequestTimePlayed()
 end
 
 function XPTrackerPro:PLAYER_MONEY()
-    XPTrackerPro_LastMoney = XPTrackerPro_LastMoney or GetMoney()
-    local cur  = GetMoney()
-    local diff = cur - XPTrackerPro_LastMoney
-    XPTrackerPro_GoldEarned = (XPTrackerPro_GoldEarned or 0) + diff
-    XPTrackerPro_LastMoney = cur
+    XPTrackerPro_GoldEarned = GetMoney() - (XPTrackerPro_GoldStart or GetMoney())
     self:UpdateCache()
 end
 
+function XPTrackerPro:PLAYER_LOGOUT()
+  self:UpdateCache()
+end
+
 function XPTrackerPro:CHAT_MSG_COMBAT_XP_GAIN(_, msg)
-  if not (msg:find("dies") or msg:find("slain")) then return end
-  local xp = tonumber(msg:match("(%d+)[^%d]*experience")); if not xp then return end
+  -- Quest XP also arrives on this chat event. Only death messages are
+  -- kill samples; QUEST_TURNED_IN accounts for quest rewards separately.
+  if type(msg) ~= "string" then return end
+  local amount = msg:match(" dies, you gain ([%d,]+) experience")
+      or msg:match(" slain, you gain ([%d,]+) experience")
+  local xp = amount and tonumber((amount:gsub(",", "")))
+  if not xp or xp <= 0 then return end
   XPTrackerPro_FirstKillXP = XPTrackerPro_FirstKillXP or xp
   table.insert(XPTrackerPro_KillXP, xp)
   if #XPTrackerPro_KillXP > maxHistory then table.remove(XPTrackerPro_KillXP, 1) end
@@ -206,7 +222,8 @@ function XPTrackerPro:CHAT_MSG_COMBAT_XP_GAIN(_, msg)
   self:UpdateCache()
 end
 
-function XPTrackerPro:QUEST_TURNED_IN(_, _, xp)
+function XPTrackerPro:QUEST_TURNED_IN(_, _, xpReward)
+  local xp = tonumber(xpReward)
   if not xp or xp <= 0 then return end
   XPTrackerPro_FirstQuestXP = XPTrackerPro_FirstQuestXP or xp
   table.insert(XPTrackerPro_QuestXP, xp)

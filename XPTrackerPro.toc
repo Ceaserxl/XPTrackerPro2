@@ -1,8 +1,10 @@
-## Interface: 11507
+## Interface: 11509
 ## Title: XP Tracker Pro
 ## Notes: XP per hour, kills/quests to level
 ## Author: CeaserXL
-## Version: 1.5.7
+## Version: 1.6.0
+## IconTexture: Interface\AddOns\XPTrackerPro\media\xptracker_icon_64
+## Category: Quests & Leveling
 ## SavedVariables: XPTrackerProDB
 
 libs\LibStub\LibStub.lua

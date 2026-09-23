@@ -46,8 +46,7 @@ cog:SetHighlightTexture("Interface\\Buttons\\UI-Common-MouseHilight","ADD")
 cog:SetScript("OnEnter",function() GameTooltip:SetOwner(cog,"ANCHOR_RIGHT") GameTooltip:SetText("Open Settings") end)
 cog:SetScript("OnLeave",GameTooltip_Hide)
 cog:SetScript("OnClick",function()
-  if Settings and Settings.OpenToCategory then Settings.OpenToCategory("XPTrackerPro")
-  else InterfaceOptionsFrame_OpenToCategory(XPTrackerPro.optionsFrame) end
+  XPTrackerPro:OpenSettings()
 end)
 
 ---------------------
@@ -63,7 +62,9 @@ textR:SetPoint("TOPRIGHT",-10,-15) textR:SetWidth(230) textR:SetJustifyH("RIGHT"
 --  FOOTER
 ---------------------
 local credit = f:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-credit:SetText("v1.5.7 · CeaserXL")
+local getMetadata = C_AddOns and C_AddOns.GetAddOnMetadata or GetAddOnMetadata
+local version = getMetadata and getMetadata("XPTrackerPro", "Version") or "1.6.0"
+credit:SetText("v" .. version .. " - CeaserXL")
 credit:SetAlpha(0.75)
 credit:SetPoint("BOTTOM",0,20)
 

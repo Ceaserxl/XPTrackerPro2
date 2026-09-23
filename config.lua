@@ -62,4 +62,12 @@ X.options = { name = "XPTrackerPro", type = "group", args = {
 --  Register with Blizzard Options
 --============================================================--
 C:RegisterOptionsTable("XPTrackerPro", X.options)
-X.optionsFrame = D:AddToBlizOptions("XPTrackerPro", "XPTrackerPro")
+X.optionsFrame, X.optionsCategoryID = D:AddToBlizOptions("XPTrackerPro", "XPTrackerPro")
+
+function X:OpenSettings()
+  if Settings and Settings.OpenToCategory and self.optionsCategoryID then
+    Settings.OpenToCategory(self.optionsCategoryID)
+  elseif InterfaceOptionsFrame_OpenToCategory and self.optionsFrame then
+    InterfaceOptionsFrame_OpenToCategory(self.optionsFrame)
+  end
+end

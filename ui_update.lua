@@ -81,8 +81,8 @@ local function BuildSectionsDual(db, p)
     if db.showAvgKillXP  then addPair("Avg Kill XP:",  p.avgKillXP and format("%.1f", p.avgKillXP) or "N/A") end
     if db.showAvgQuestXP then addPair("Avg Quest XP:", p.avgQuestXP and format("%.1f", p.avgQuestXP) or "N/A") end
     if db.showRestedXP   then
-      addPair("Rested XP:", format("%d (%.0f%%)", p.restedXP,
-                                   (p.restedXP / p.maxXP) * 100))
+      local restedPercent = p.maxXP > 0 and (p.restedXP / p.maxXP) * 100 or 0
+      addPair("Rested XP:", format("%d (%.0f%%)", p.restedXP, restedPercent))
     end
     close()
   end
@@ -130,11 +130,19 @@ local function UpdateDisplay()
   --------------------------------------------------------------
   local curXP, maxXP   = UnitXP("player"), UnitXPMax("player")
   local restedXP       = GetXPExhaustion() or 0
-  normalBar:SetMinMaxValues(0, maxXP)
-  normalBar:SetValue(curXP)
-  restedBar:SetMinMaxValues(0, maxXP)
-  restedBar:SetValue(math.min(curXP + restedXP, maxXP))
-  pctText:SetText(format("%.0f%% (%d left)", curXP / maxXP * 100, maxXP - curXP))
+  if maxXP > 0 then
+    normalBar:SetMinMaxValues(0, maxXP)
+    normalBar:SetValue(curXP)
+    restedBar:SetMinMaxValues(0, maxXP)
+    restedBar:SetValue(math.min(curXP + restedXP, maxXP))
+    pctText:SetText(format("%.0f%% (%d left)", curXP / maxXP * 100, maxXP - curXP))
+  else
+    normalBar:SetMinMaxValues(0, 1)
+    normalBar:SetValue(1)
+    restedBar:SetMinMaxValues(0, 1)
+    restedBar:SetValue(0)
+    pctText:SetText("Level cap")
+  end
 
   --------------------------------------------------------------
   --  Time calculations
@@ -199,15 +207,22 @@ end
 --============================================================--
 --  Bind to OnUpdate
 --============================================================--
-f:SetScript("OnUpdate", UpdateDisplay)
+local updateElapsed = 0
+f:SetScript("OnUpdate", function(_, elapsed)
+  updateElapsed = updateElapsed + elapsed
+  if updateElapsed < 0.2 then return end
+  updateElapsed = 0
+  UpdateDisplay()
+end)
 
 --============================================================--
 --  Minimap Icon (LibDataBroker + LibDBIcon) – live data feed
 --============================================================--
-do
+function addon:InitializeMinimap()
+    if self.minimapInitialized then return end
+
     local LDB  = LibStub("LibDataBroker-1.1")
     local LDBI = LibStub("LibDBIcon-1.0")
-    addon.db   = addon.db or { profile = { minimap = { hide = false } } }
 
     -- helper: rebuild the data table exactly like UpdateDisplay does
     local function BuildSnapshot()
@@ -251,8 +266,7 @@ do
         OnClick = function(_,btn)
             if btn=="LeftButton" then XPTrackerPro_Frame:SetShown(not XPTrackerPro_Frame:IsShown())
             else
-                if Settings and Settings.OpenToCategory then Settings.OpenToCategory("XPTrackerPro")
-                else InterfaceOptionsFrame_OpenToCategory(XPTrackerPro.optionsFrame) end
+                addon:OpenSettings()
             end
         end,
         OnTooltipShow = function(tt)
@@ -278,4 +292,5 @@ do
         end,
     })
     LDBI:Register("XPTrackerPro", obj, addon.db.profile.minimap)
+    self.minimapInitialized = true
 end
