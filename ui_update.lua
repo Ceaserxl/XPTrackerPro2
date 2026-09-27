@@ -71,7 +71,6 @@ function X:RefreshDisplay()
     f.level:SetText("Level " .. s.level)
     f.progress:SetText(s.capped and "MAX LEVEL" or string.format("%.1f%%", s.maxXP > 0 and s.curXP / s.maxXP * 100 or 0))
     f.remaining:SetText(s.capped and "Level cap reached" or Number(s.remainXP) .. " XP to next level")
-    f.subtitle:SetText(p.compact and "SESSION AT A GLANCE" or "LEVELING OVERVIEW")
     f.status:SetText(p.locked and "LOCKED" or "DRAG HEADER")
     f.collapse.label:SetText(p.compact and "+" or "-")
     local maximum = math.max(1, s.maxXP)
@@ -83,7 +82,7 @@ function X:RefreshDisplay()
     f.restedBar:SetShown(p.showRested and not s.capped)
     f.track:SetShown(p.showNormal or p.showRested)
     local rows = self:BuildRows(s, p.compact)
-    local y = 119
+    local y = 107
     for index, data in ipairs(rows) do
         local row = self:GetDisplayRow(index)
         row:ClearAllPoints()
@@ -92,6 +91,10 @@ function X:RefreshDisplay()
         row.tip = data.tip
         row.left:SetText(data.title or data.label)
         row.right:SetText(data.value or "")
+        -- Remaining-count values are short; give their longer labels more room.
+        local longLabel = data.label == "Quests remaining" or data.label == "Kills remaining"
+        row.left:SetWidth(longLabel and 140 or 116)
+        row.right:SetWidth(longLabel and 104 or 128)
         if data.title then
             row.left:SetTextColor(0.83, 0.70, 0.43)
             row.background:Hide()

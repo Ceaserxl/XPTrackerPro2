@@ -179,10 +179,10 @@ equal(X:GetSnapshot().avgKillXP, 7.5, "rolling ten-sample average")
 local rows = X:BuildRows(X:GetSnapshot(), false)
 equal(#rows, 17, "all original statistics preserved")
 X:RefreshDisplay()
-equal(X.window.height, 499, "full layout height")
+equal(X.window.height, 487, "full layout height")
 X.db.profile.compact = true
 X:RefreshDisplay()
-equal(X.window.height, 230, "compact layout height")
+equal(X.window.height, 218, "compact layout height")
 equal(X.window.rows[5]:IsShown(), false, "unused rows hidden")
 X.db.profile.enableXPSection = false
 equal(#X:BuildRows(X:GetSnapshot(), true), 3, "compact honors section switches")
@@ -228,7 +228,7 @@ for _, key in ipairs({"enableXPSection", "enableTimeSection", "enableXToSection"
 end
 X:RefreshDisplay()
 equal(#X:BuildRows(X:GetSnapshot(), false), 0, "all sections disabled")
-equal(X.window.height, 147, "empty layout stays compact")
+equal(X.window.height, 135, "empty layout stays compact")
 X.db.profile.showNormal, X.db.profile.showRested = false, false
 X:RefreshDisplay()
 equal(X.window.track:IsShown(), false, "bar options honored")
