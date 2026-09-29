@@ -2,7 +2,7 @@
 ## Title: XP Tracker Pro
 ## Notes: XP per hour, kills/quests to level
 ## Author: CeaserXL
-## Version: 2.0.1
+## Version: 2.1.0
 ## IconTexture: Interface\AddOns\XPTrackerPro\media\xptracker_icon_64
 ## Category: Quests & Leveling
 ## SavedVariables: XPTrackerProDB
@@ -22,6 +22,8 @@ libs\AceConfig-3.0\AceConfig-3.0.xml
 libs\AceComm-3.0\AceComm-3.0.xml
 
 calculations.lua
+quest_xp_data.lua
+quests.lua
 XPTrackerPro.lua
 config.lua
 ui_layout.lua

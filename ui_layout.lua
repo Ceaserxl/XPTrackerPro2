@@ -100,6 +100,10 @@ local function Bar(r, g, b, level)
 end
 f.restedBar = Bar(0.17, 0.48, 0.73, 1)
 f.normalBar = Bar(0.50, 0.32, 0.76, 2)
+f.questBar = Bar(0.95, 0.70, 0.18, 3)
+f.questBar:SetMinMaxValues(0, 1)
+f.questBar:SetValue(1)
+f.questBar:Hide()
 _G.XPTrackerPro_NormalBar, _G.XPTrackerPro_RestedBar = f.normalBar, f.restedBar
 f.remaining = Label(f, "GameFontHighlightSmall", "TOPLEFT", nil, 12, -87)
 f.remaining:SetTextColor(0.64, 0.67, 0.72)

@@ -39,6 +39,7 @@ X.options = { name = "XPTrackerPro", type = "group", args = {
     showAvgKillXP  = { type="toggle", order=3, name="Avg Kill XP", get=function() return p().showAvgKillXP end, set=function(_,v) p().showAvgKillXP=v end },
     showAvgQuestXP = { type="toggle", order=4, name="Avg Quest XP", get=function() return p().showAvgQuestXP end, set=function(_,v) p().showAvgQuestXP=v end },
     showRestedXP   = { type="toggle", order=5, name="Rested XP", get=function() return p().showRestedXP end, set=function(_,v) p().showRestedXP=v end },
+    showCompletedQuestXP = { type="toggle", order=6, name="Completed Quest XP", get=function() return p().showCompletedQuestXP end, set=function(_,v) p().showCompletedQuestXP=v X:RefreshDisplay() end },
   }},
 
   -- X-To -----------------------------------------------------
@@ -58,6 +59,7 @@ X.options = { name = "XPTrackerPro", type = "group", args = {
 
   -- Bars -----------------------------------------------------
   bars = { type="group", inline=true, order=10, name="XP Bars", args = {
+    showCompletedQuestBar = { type="toggle", order=3, name="Completed Quest XP (Gold)", get=function() return p().showCompletedQuestBar end, set=function(_,v) p().showCompletedQuestBar=v X:RefreshDisplay() end },
     showNormal = { type="toggle", order=1, name="Normal XP Bar", get=function() return p().showNormal end, set=function(_,v) p().showNormal=v if XPTrackerPro_NormalBar then XPTrackerPro_NormalBar:SetShown(v) end end },
     showRested = { type="toggle", order=2, name="Rested XP Bar", get=function() return p().showRested end, set=function(_,v) p().showRested=v if XPTrackerPro_RestedBar then XPTrackerPro_RestedBar:SetShown(v) end end },
   }},

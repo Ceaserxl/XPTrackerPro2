@@ -42,6 +42,9 @@ function X:BuildRows(s, compact)
             "Average of the latest " .. s.killSamples .. " kills (up to 10). Includes awarded bonuses; quest XP is excluded." },
         { "showAvgQuestXP", "Avg. quest XP", s.avgQuestXP and string.format("%.1f", s.avgQuestXP) or "--",
             "Average of the latest " .. s.questSamples .. " quests with an XP reward (up to 10)." },
+        { "showCompletedQuestXP", "Completed Quest XP", Number(s.completedQuestXP) .. (s.unknownQuestXP > 0 and " + ?" or ""),
+            "Estimated XP from completed quests awaiting turn-in. Uses Classic Era base rewards adjusted for your level; temporary XP bonuses are not included. Gold previews this XP after your current XP, up to the level boundary."
+            .. (s.unknownQuestXP > 0 and (" Missing reward data for " .. s.unknownQuestXP .. " completed quest(s); the total is partial.") or "") },
         { "showRestedXP", "Rested XP", Number(s.restedXP),
             "Stored rested XP: " .. string.format("%.1f%%", s.maxXP > 0 and s.restedXP / s.maxXP * 100 or 0) .. " of the current level." },
     })
@@ -65,12 +68,26 @@ end
 function X:RefreshDisplay()
     if not self.db or not self.started then return end
     local p, s = self.db.profile, self:GetSnapshot()
+    local ready = not s.capped and s.remainXP > 0 and s.completedQuestXP >= s.remainXP
+    f.questReady = ready
     f:SetWidth(self.WINDOW_WIDTH)
     f:SetScale(p.scale)
     f:SetBackdropColor(0.055, 0.064, 0.078, p.opacity)
     f.level:SetText("Level " .. s.level)
     f.progress:SetText(s.capped and "MAX LEVEL" or string.format("%.1f%%", s.maxXP > 0 and s.curXP / s.maxXP * 100 or 0))
     f.remaining:SetText(s.capped and "Level cap reached" or Number(s.remainXP) .. " XP to next level")
+    if ready then
+        f.progress:SetText("READY TO LEVEL")
+        f.progress:SetTextColor(1, 0.82, 0.30)
+        f.remaining:SetText("Turn in quests for Level " .. (s.level + 1))
+        f.remaining:SetTextColor(1, 0.82, 0.30)
+        f:SetBackdropBorderColor(0.95, 0.70, 0.18, 1)
+    else
+        f.progress:SetTextColor(1, 1, 1)
+        f.remaining:SetTextColor(0.64, 0.67, 0.72)
+        f:SetBackdropBorderColor(0.48, 0.42, 0.29, 1)
+        f.questBar:SetStatusBarColor(0.95, 0.70, 0.18)
+    end
     f.status:SetText(p.locked and "LOCKED" or "DRAG HEADER")
     f.collapse.label:SetText(p.compact and "+" or "-")
     local maximum = math.max(1, s.maxXP)
@@ -80,7 +97,14 @@ function X:RefreshDisplay()
     f.restedBar:SetValue(s.capped and 0 or math.min(maximum, s.curXP + s.restedXP))
     f.normalBar:SetShown(p.showNormal)
     f.restedBar:SetShown(p.showRested and not s.capped)
-    f.track:SetShown(p.showNormal or p.showRested)
+    local start, span = M.QuestSegment(s.curXP, s.maxXP, s.completedQuestXP)
+    local questShown = p.showCompletedQuestBar and not s.capped and span > 0
+    f.questBar:ClearAllPoints()
+    local barWidth = self.WINDOW_WIDTH - 26
+    f.questBar:SetPoint("TOPLEFT", f.track, "TOPLEFT", 1 + start * barWidth, -1)
+    f.questBar:SetSize(math.max(0.01, span * barWidth), 14)
+    f.questBar:SetShown(questShown)
+    f.track:SetShown(p.showNormal or p.showRested or questShown)
     local rows = self:BuildRows(s, p.compact)
     local y = 107
     for index, data in ipairs(rows) do
@@ -93,8 +117,9 @@ function X:RefreshDisplay()
         row.right:SetText(data.value or "")
         -- Remaining-count values are short; give their longer labels more room.
         local longLabel = data.label == "Quests remaining" or data.label == "Kills remaining"
-        row.left:SetWidth(longLabel and 140 or 116)
-        row.right:SetWidth(longLabel and 104 or 128)
+        local completedLabel = data.label == "Completed Quest XP"
+        row.left:SetWidth(completedLabel and 164 or longLabel and 140 or 116)
+        row.right:SetWidth(completedLabel and 80 or longLabel and 104 or 128)
         if data.title then
             row.left:SetTextColor(0.83, 0.70, 0.43)
             row.background:Hide()
@@ -116,6 +141,11 @@ end
 
 local elapsedTotal = 0
 f:SetScript("OnUpdate", function(_, elapsed)
+    if f.questReady and f.questBar:IsShown() then
+        -- A gentle two-second gold shimmer; never fade the XP preview away.
+        local glow = (math.sin(GetTime() * math.pi) + 1) / 2
+        f.questBar:SetStatusBarColor(0.95 + 0.05 * glow, 0.70 + 0.15 * glow, 0.18 + 0.22 * glow)
+    end
     elapsedTotal = elapsedTotal + elapsed
     if elapsedTotal >= 0.25 then elapsedTotal = 0; X:RefreshDisplay() end
 end)

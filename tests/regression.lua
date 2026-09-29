@@ -6,6 +6,8 @@ local function equal(actual, expected, message)
     passed = passed + 1
 end
 dofile("calculations.lua")
+dofile("quest_xp_data.lua")
+dofile("quests.lua")
 local M = XPTrackerProMath
 equal(M.Time(3661.99), "01:01:01", "fractional seconds")
 equal(M.Time(nil), "--", "unknown played time")
@@ -31,6 +33,22 @@ state = { xp = 950, maximum = 1000, level = 59 }
 equal(M.ObserveXP(state, 0, 0, 60), 50, "reaching cap")
 
 local now, money, xp, maxXP, level = 100, 20000, 100, 1000, 10
+local questLog = {}
+local function visibleQuests()
+    local entries, collapsed = {}, false
+    for _, q in ipairs(questLog) do
+        if q.header then collapsed = q.collapsed end
+        if q.header or not collapsed then entries[#entries + 1] = q end
+    end
+    return entries
+end
+function GetNumQuestLogEntries() return #visibleQuests() end
+function GetQuestLogTitle(index)
+    local q = visibleQuests()[index]
+    return q.title, q.level, nil, q.header, q.collapsed, q.complete, nil, q.id
+end
+function ExpandQuestHeader(index) visibleQuests()[index].collapsed = false end
+function CollapseQuestHeader(index) visibleQuests()[index].collapsed = true end
 local deferred, frames = {}, {}
 function GetTime() return now end
 function GetMoney() return money end
@@ -177,9 +195,9 @@ for i = 1, 12 do X:CHAT_MSG_COMBAT_XP_GAIN(nil, "Wolf dies, you gain " .. i .. "
 equal(X:GetSnapshot().killSamples, 10)
 equal(X:GetSnapshot().avgKillXP, 7.5, "rolling ten-sample average")
 local rows = X:BuildRows(X:GetSnapshot(), false)
-equal(#rows, 17, "all original statistics preserved")
+equal(#rows, 18, "original statistics plus completed quest XP")
 X:RefreshDisplay()
-equal(X.window.height, 487, "full layout height")
+equal(X.window.height, 507, "full layout height")
 X.db.profile.compact = true
 X:RefreshDisplay()
 equal(X.window.height, 218, "compact layout height")
@@ -236,4 +254,82 @@ X.db.profile.width = 440
 X:RefreshDisplay()
 equal(X.window.width, 280, "legacy saved width cannot override fixed width")
 equal(X.window.rows[2].right.fontSize, 13, "readable default statistic font")
+-- Pending quest XP is an estimate, never an earned XP sample.
+level, xp, maxXP = 10, 100, 1000
+questLog = {
+    { title = "Zone", header = true, collapsed = true },
+    { title = "Ready", id = 11, complete = 1 }, -- level 10, 840 base -> 850
+    { title = "Incomplete", id = 12 },
+    { title = "Failed", id = 13, complete = -1 },
+    { title = "Unknown", id = 999999, complete = 1 },
+}
+X:QUEST_LOG_UPDATE()
+equal(X:GetSnapshot().completedQuestXP, 850, "only completed quests counted")
+equal(X:GetSnapshot().unknownQuestXP, 1, "unknown reward disclosed")
+equal(questLog[1].collapsed, true, "collapsed header restored after counting hidden quests")
+equal(X:GetSnapshot().xpGained, 0, "preview does not grant XP")
+equal(X:GetSnapshot().avgKillXP, nil, "preview does not affect kill samples")
+equal(M.QuestReward(11, 16), 675, "over-level XP reduction and rounding")
+local start, span = M.QuestSegment(900, 1000, 850)
+equal(start, 0.9, "gold starts at actual XP")
+equal(math.floor(span * 1000 + 0.5), 100, "gold clips to level boundary")
+start, span = M.QuestSegment(100, 1000, 0)
+equal(span, 0, "no rewards means no gold segment")
+start, span = M.QuestSegment(0, 0, 850)
+equal(span, 0, "zero maximum is safe")
+X.db.profile.enableXPSection = true
+X.db.profile.showNormal, X.db.profile.showRested = true, true
+X:RefreshDisplay()
+equal(X.window.questBar:IsShown(), true)
+equal(X.window.questBar.width, 0.85 * 254, "gold segment width")
+equal(math.floor(X.window.questBar.point[4] * 10 + 0.5), 264, "gold starts after current XP")
+local completedRow
+for _, row in ipairs(X.window.rows) do
+    if row.left.text == "Completed Quest XP" then completedRow = row end
+end
+equal(completedRow.right.text, "850 + ?", "partial total visibly marked")
+equal(completedRow.left.width, 164, "room for complete label")
+equal(X.window.questReady, false, "insufficient quest XP is not ready")
+xp = 150
+X:RefreshDisplay()
+equal(X.window.questReady, true, "exactly enough completed XP is ready")
+equal(X.window.progress.text, "READY TO LEVEL", "ready header")
+equal(X.window.remaining.text, "Turn in quests for Level 11", "turn-in prompt names next level")
+X.window.scripts.OnUpdate(X.window, 0.1)
+xp = 200
+X.db.profile.compact = true
+X:RefreshDisplay()
+equal(X.window.questReady, true, "surplus XP is ready in compact view")
+X.db.profile.compact = false
+xp = 100
+X:RefreshDisplay()
+equal(X.window.questReady, false, "readiness clears below threshold")
+equal(X.window.progress.text, "10.0%", "ordinary progress restored")
+equal(X.window.remaining.text, "900 XP to next level", "remaining XP restored")
+X.db.profile.showCompletedQuestBar = false
+X:RefreshDisplay()
+equal(X.window.questBar:IsShown(), false, "gold toggle")
+X.db.profile.showCompletedQuestBar = true
+X.db.profile.showCompletedQuestXP = false
+local hidden = true
+for _, row in ipairs(X:BuildRows(X:GetSnapshot(), false)) do
+    if row.label == "Completed Quest XP" then hidden = false end
+end
+equal(hidden, true, "row toggle")
+level = 16
+equal(X:GetSnapshot().completedQuestXP, 675, "level changes recalculate reward")
+questLog = {}
+flush()
+X:QUEST_LOG_UPDATE()
+X:RefreshDisplay()
+equal(X:GetSnapshot().completedQuestXP, 0, "abandon or turn-in removes preview")
+equal(X.window.questBar:IsShown(), false, "empty segment hidden")
+questLog = {{ title = "Ready", id = 11, complete = 1 }}
+flush()
+X:QUEST_LOG_UPDATE()
+level, xp, maxXP = 60, 0, 0
+X:RefreshDisplay()
+equal(X:GetSnapshot().completedQuestXP, 0, "no quest XP at cap")
+equal(X.window.questBar:IsShown(), false, "cap hides gold")
+equal(X.window.questReady, false, "cap suppresses ready indicator")
 print("PASS: " .. passed .. " regression assertions")

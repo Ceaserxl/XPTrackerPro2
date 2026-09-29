@@ -1,7 +1,7 @@
-# XP Tracker Pro 2.0
+# XP Tracker Pro 2.1
 
 Classic Era leveling dashboard with a charcoal frame, gold trim, purple XP fill,
-blue rested overlay, and separately aligned statistic rows.
+blue rested overlay, gold completed-quest preview, and separately aligned statistic rows.
 
 ## Controls
 
@@ -29,6 +29,20 @@ Center Window action. Reset Session in settings requires confirmation.
   Blizzard's localized named-kill formats, including rested/group variants.
   Generic XP messages and quest turn-ins cannot enter this average.
 - **Quest average:** the latest 10 positive QUEST_TURNED_IN XP rewards.
+- **Completed Quest XP:** estimated XP from completed quests still in your log,
+  awaiting turn-in. Bundled Classic Era rewards are adjusted for your level;
+  temporary XP bonuses are excluded. Unknown rewards show `+ ?` and a tooltip
+  explanation. The gold bar segment starts at current XP and clips at the next
+  level; the row retains the full total. It overlays rested preview where they
+  overlap. At level cap the value is zero and the gold segment is hidden.
+  Quest-log changes and level changes refresh the estimate. This does not add
+  to session XP or kill/quest averages until XP is actually earned. Separate
+  settings control the row and bar; no other addon is required.
+  When this estimate covers the XP to the next level, the header shows gold
+  **READY TO LEVEL**, the line below the bar prompts you to turn in quests,
+  and the window border turns gold while the quest segment gently shimmers.
+  This works in compact view too and clears when the estimate is insufficient
+  or you reach the level cap.
 - **XP/hour:** session XP multiplied by 3,600, divided by online session seconds.
 - **Kills/quests remaining:** remaining XP divided by the respective average,
   rounded up. These are estimates; enemy levels, rested bonuses, and quest
@@ -64,6 +78,10 @@ Check dragging/locking, compact view, all settings, and the minimap tooltip.
 Gain kill, quest, and exploration XP; compare session XP with the XP bar.
 Test a level-up, spending/receiving money, and a logout/login. Confirm quest
 turn-ins leave the kill average unchanged and the two displays agree.
+Complete, abandon, and turn in quests and check the new total and gold segment.
+Check a reward exceeding remaining XP, collapsed quest headers, level cap,
+and both new visibility toggles. Reward estimates and font fit need in-game
+verification. Interface 11509 matches the installed 1.15.9 client.
 
 Localized format reference:
 https://github.com/Ketho/BlizzardInterfaceResources/blob/classic/Resources/GlobalStrings/enUS.lua

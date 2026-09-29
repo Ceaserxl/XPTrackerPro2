@@ -6,10 +6,10 @@ local defaults = {
     profile = {
         scale = 1, opacity = 0.96, locked = false, compact = false,
         hidden = false, minimap = { hide = false },
-        showNormal = true, showRested = true,
+        showNormal = true, showRested = true, showCompletedQuestBar = true,
         enableTimeSection = true, showSessionTime = true, showLevelTime = true, showTotalPlayed = true,
         enableXPSection = true, showXPGained = true, showXPPerHour = true,
-        showAvgKillXP = true, showAvgQuestXP = true, showRestedXP = true,
+        showAvgKillXP = true, showAvgQuestXP = true, showRestedXP = true, showCompletedQuestXP = true,
         enableXToSection = true, showKillsToLevel = true, showQuestsToLevel = true, showTimeToLevel = true,
         enableGoldSection = true, showGoldEarned = true, showGoldPerHour = true,
         resetOnLogin = false,
@@ -47,13 +47,14 @@ function X:OnEnable()
     for _, event in ipairs({
         "PLAYER_ENTERING_WORLD", "PLAYER_LOGOUT", "TIME_PLAYED_MSG",
         "PLAYER_LEVEL_UP", "PLAYER_XP_UPDATE", "CHAT_MSG_COMBAT_XP_GAIN",
-        "QUEST_TURNED_IN", "PLAYER_MONEY",
+        "QUEST_TURNED_IN", "PLAYER_MONEY", "QUEST_LOG_UPDATE",
     }) do self:RegisterEvent(event) end
 end
 
 function X:PLAYER_ENTERING_WORLD()
     if self.started then return end
     self.started = true
+    self.questXPDirty = true
     local key = CharKey()
     local saved = self.db.global[key]
     -- Migrate keys created by the previous UnitFullName implementation.
@@ -116,6 +117,7 @@ function X:PLAYER_LEVEL_UP()
     if not self.started then return end
     -- Separate timestamps prevent a level reset from subtracting total played.
     self.levelPlayed, self.levelStamp = 0, GetTime()
+    self.questXPDirty = true
     self:PLAYER_XP_UPDATE()
 end
 
@@ -139,6 +141,11 @@ end
 function X:QUEST_TURNED_IN(_, questID, reward)
     if not self.started then return end
     Sample(self.session.questXP, tonumber(reward))
+    self.questXPDirty = true
+end
+
+function X:QUEST_LOG_UPDATE()
+    if not self.questScanInProgress then self.questXPDirty = true end
 end
 
 function X:PLAYER_LOGOUT()
@@ -155,6 +162,13 @@ function X:GetSnapshot()
     local xp, maximum = UnitXP("player"), UnitXPMax("player")
     local cap = maximum <= 0
     if GetMaxPlayerLevel then cap = cap or UnitLevel("player") >= GetMaxPlayerLevel() end
+    if self.questXPDirty or self.questXPLevel ~= UnitLevel("player") then
+        self.questScanInProgress = true
+        self.completedQuestXP, self.unknownQuestXP = M.CompletedQuestXP(UnitLevel("player"))
+        self.questXPLevel, self.questXPDirty = UnitLevel("player"), false
+        -- Header expansion/restoration may emit quest-log updates of its own.
+        C_Timer.After(0, function() self.questScanInProgress = false end)
+    end
     local remaining = cap and 0 or math.max(0, maximum - xp)
     local rate = M.Rate(s.sessionXPGained or 0, seconds)
     local kill, quest = M.Average(s.killXP or {}), M.Average(s.questXP or {})
@@ -163,6 +177,8 @@ function X:GetSnapshot()
         session = seconds, xpGained = s.sessionXPGained or 0, xpPerHr = rate,
         curXP = xp, maxXP = maximum, remainXP = remaining, capped = cap,
         level = UnitLevel("player"), restedXP = GetXPExhaustion() or 0,
+        completedQuestXP = cap and 0 or (self.completedQuestXP or 0),
+        unknownQuestXP = cap and 0 or (self.unknownQuestXP or 0),
         playTot = self.totalPlayed and self.totalPlayed + math.max(0, now - self.totalStamp),
         playLvl = self.levelPlayed and self.levelPlayed + math.max(0, now - self.levelStamp),
         avgKillXP = kill, avgQuestXP = quest,
