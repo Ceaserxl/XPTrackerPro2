@@ -44,7 +44,7 @@ function X:BuildRows(s, compact)
             "Average of the latest " .. s.questSamples .. " quests with an XP reward (up to 10)." },
         { "showCompletedQuestXP", "Completed Quest XP", Number(s.completedQuestXP) .. (s.unknownQuestXP > 0 and " + ?" or ""),
             "Estimated XP from completed quests awaiting turn-in. Uses Classic Era base rewards adjusted for your level; temporary XP bonuses are not included. Gold previews this XP after your current XP, up to the level boundary."
-            .. (s.unknownQuestXP > 0 and (" Missing reward data for " .. s.unknownQuestXP .. " completed quest(s); the total is partial.") or "") },
+            .. (s.unknownQuestXP > 0 and (" Completion or reward data is unavailable for " .. s.unknownQuestXP .. " quest(s); the total is partial.") or "") },
         { "showRestedXP", "Rested XP", Number(s.restedXP),
             "Stored rested XP: " .. string.format("%.1f%%", s.maxXP > 0 and s.restedXP / s.maxXP * 100 or 0) .. " of the current level." },
     })
@@ -74,13 +74,11 @@ function X:RefreshDisplay()
     f:SetScale(p.scale)
     f:SetBackdropColor(0.055, 0.064, 0.078, p.opacity)
     f.level:SetText("Level " .. s.level)
-    f.progress:SetText(s.capped and "MAX LEVEL" or string.format("%.1f%%", s.maxXP > 0 and s.curXP / s.maxXP * 100 or 0))
+    f.progress:SetText(s.capped and "MAX LEVEL" or string.format("%s / %s (%.1f%%)",
+        Number(s.curXP), Number(s.maxXP), s.maxXP > 0 and s.curXP / s.maxXP * 100 or 0))
     f.remaining:SetText(s.capped and "Level cap reached" or Number(s.remainXP) .. " XP to next level")
+    f.ready:SetShown(ready)
     if ready then
-        f.progress:SetText("READY TO LEVEL")
-        f.progress:SetTextColor(1, 0.82, 0.30)
-        f.remaining:SetText("Turn in quests for Level " .. (s.level + 1))
-        f.remaining:SetTextColor(1, 0.82, 0.30)
         f:SetBackdropBorderColor(0.95, 0.70, 0.18, 1)
     else
         f.progress:SetTextColor(1, 1, 1)
@@ -102,11 +100,11 @@ function X:RefreshDisplay()
     f.questBar:ClearAllPoints()
     local barWidth = self.WINDOW_WIDTH - 26
     f.questBar:SetPoint("TOPLEFT", f.track, "TOPLEFT", 1 + start * barWidth, -1)
-    f.questBar:SetSize(math.max(0.01, span * barWidth), 14)
+    f.questBar:SetSize(math.max(0.01, span * barWidth), 24)
     f.questBar:SetShown(questShown)
     f.track:SetShown(p.showNormal or p.showRested or questShown)
     local rows = self:BuildRows(s, p.compact)
-    local y = 107
+    local y = 117
     for index, data in ipairs(rows) do
         local row = self:GetDisplayRow(index)
         row:ClearAllPoints()

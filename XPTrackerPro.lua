@@ -162,10 +162,12 @@ function X:GetSnapshot()
     local xp, maximum = UnitXP("player"), UnitXPMax("player")
     local cap = maximum <= 0
     if GetMaxPlayerLevel then cap = cap or UnitLevel("player") >= GetMaxPlayerLevel() end
-    if self.questXPDirty or self.questXPLevel ~= UnitLevel("player") then
+    if self.questXPDirty or self.questXPLevel ~= UnitLevel("player")
+        or not self.questXPStamp or now - self.questXPStamp >= 2 then
         self.questScanInProgress = true
         self.completedQuestXP, self.unknownQuestXP = M.CompletedQuestXP(UnitLevel("player"))
         self.questXPLevel, self.questXPDirty = UnitLevel("player"), false
+        self.questXPStamp = now
         -- Header expansion/restoration may emit quest-log updates of its own.
         C_Timer.After(0, function() self.questScanInProgress = false end)
     end

@@ -29,8 +29,11 @@ Center Window action. Reset Session in settings requires confirmation.
   Blizzard's localized named-kill formats, including rested/group variants.
   Generic XP messages and quest turn-ins cannot enter this average.
 - **Quest average:** the latest 10 positive QUEST_TURNED_IN XP rewards.
-- **Completed Quest XP:** estimated XP from completed quests still in your log,
-  awaiting turn-in. Bundled Classic Era rewards are adjusted for your level;
+- **Completed Quest XP:** estimated XP from quests awaiting turn-in,
+  including turn-in-only quests identified by generated Classic quest metadata.
+  Completion checks honor failures, objectives and required money. Scripted
+  quests require native completion; unloaded or missing data is marked `+ ?`.
+  Bundled Classic Era rewards are adjusted for your level;
   temporary XP bonuses are excluded. Unknown rewards show `+ ?` and a tooltip
   explanation. The gold bar segment starts at current XP and clips at the next
   level; the row retains the full total. It overlays rested preview where they
@@ -39,8 +42,9 @@ Center Window action. Reset Session in settings requires confirmation.
   to session XP or kill/quest averages until XP is actually earned. Separate
   settings control the row and bar; no other addon is required.
   When this estimate covers the XP to the next level, the header shows gold
-  **READY TO LEVEL**, the line below the bar prompts you to turn in quests,
-  and the window border turns gold while the quest segment gently shimmers.
+  **READY TO LEVEL**, and the window border turns gold while the quest segment
+  gently shimmers. The 26px XP bar centers current / required XP and percentage;
+  the line below continues to show remaining XP.
   This works in compact view too and clears when the estimate is insufficient
   or you reach the level cap.
 - **XP/hour:** session XP multiplied by 3,600, divided by online session seconds.

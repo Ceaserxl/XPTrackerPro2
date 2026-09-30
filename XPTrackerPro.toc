@@ -23,6 +23,7 @@ libs\AceComm-3.0\AceComm-3.0.xml
 
 calculations.lua
 quest_xp_data.lua
+quest_requirements.lua
 quests.lua
 XPTrackerPro.lua
 config.lua

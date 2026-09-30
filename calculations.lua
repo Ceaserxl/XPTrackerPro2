@@ -23,8 +23,10 @@ end
 function M.Time(seconds)
     if not seconds then return "--" end
     seconds = math.floor(math.max(0, seconds))
-    return string.format("%02d:%02d:%02d", math.floor(seconds / 3600),
+    local time = string.format("%02d:%02d:%02d", math.floor(seconds / 3600) % 24,
         math.floor(seconds / 60) % 60, seconds % 60)
+    local days = math.floor(seconds / 86400)
+    return days > 0 and string.format("%02d:%s", days, time) or time
 end
 
 function M.Gold(copper)

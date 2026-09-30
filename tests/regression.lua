@@ -7,9 +7,16 @@ local function equal(actual, expected, message)
 end
 dofile("calculations.lua")
 dofile("quest_xp_data.lua")
+dofile("quest_requirements.lua")
 dofile("quests.lua")
 local M = XPTrackerProMath
 equal(M.Time(3661.99), "01:01:01", "fractional seconds")
+equal(M.Time(0), "00:00:00", "zero duration")
+equal(M.Time(86399.99), "23:59:59", "last second before a day")
+equal(M.Time(86400), "01:00:00:00", "day rollover")
+equal(M.Time(93784.99), "01:02:03:04", "days with fractional seconds")
+equal(M.Time(172800), "02:00:00:00", "multiple days")
+equal(M.Time(8640000), "100:00:00:00", "days are not truncated")
 equal(M.Time(nil), "--", "unknown played time")
 equal(M.Time(-1), "00:00:00", "negative time")
 equal(M.Gold(-10050.5), "-1g 0s 51c", "negative gold rounds symmetrically")
@@ -114,6 +121,7 @@ local noopMethods = {
     "SetColorTexture", "SetAllPoints", "RegisterForDrag", "StartMoving", "StopMovingOrSizing",
     "SetHighlightTexture", "SetVertexColor", "SetStatusBarTexture", "SetStatusBarColor",
     "SetScale", "ClearAllPoints", "SetMinMaxValues", "SetValue", "SetTexture", "SetWordWrap",
+    "SetShadowColor", "SetShadowOffset",
 }
 for _, name in ipairs(noopMethods) do methods[name] = function() end end
 function CreateFrame(_, name)
@@ -197,10 +205,10 @@ equal(X:GetSnapshot().avgKillXP, 7.5, "rolling ten-sample average")
 local rows = X:BuildRows(X:GetSnapshot(), false)
 equal(#rows, 18, "original statistics plus completed quest XP")
 X:RefreshDisplay()
-equal(X.window.height, 507, "full layout height")
+equal(X.window.height, 517, "full layout height")
 X.db.profile.compact = true
 X:RefreshDisplay()
-equal(X.window.height, 218, "compact layout height")
+equal(X.window.height, 228, "compact layout height")
 equal(X.window.rows[5]:IsShown(), false, "unused rows hidden")
 X.db.profile.enableXPSection = false
 equal(#X:BuildRows(X:GetSnapshot(), true), 3, "compact honors section switches")
@@ -246,7 +254,7 @@ for _, key in ipairs({"enableXPSection", "enableTimeSection", "enableXToSection"
 end
 X:RefreshDisplay()
 equal(#X:BuildRows(X:GetSnapshot(), false), 0, "all sections disabled")
-equal(X.window.height, 135, "empty layout stays compact")
+equal(X.window.height, 145, "empty layout stays compact")
 X.db.profile.showNormal, X.db.profile.showRested = false, false
 X:RefreshDisplay()
 equal(X.window.track:IsShown(), false, "bar options honored")
@@ -265,7 +273,7 @@ questLog = {
 }
 X:QUEST_LOG_UPDATE()
 equal(X:GetSnapshot().completedQuestXP, 850, "only completed quests counted")
-equal(X:GetSnapshot().unknownQuestXP, 1, "unknown reward disclosed")
+equal(X:GetSnapshot().unknownQuestXP, 2, "unknown reward and unavailable objectives disclosed")
 equal(questLog[1].collapsed, true, "collapsed header restored after counting hidden quests")
 equal(X:GetSnapshot().xpGained, 0, "preview does not grant XP")
 equal(X:GetSnapshot().avgKillXP, nil, "preview does not affect kill samples")
@@ -293,8 +301,9 @@ equal(X.window.questReady, false, "insufficient quest XP is not ready")
 xp = 150
 X:RefreshDisplay()
 equal(X.window.questReady, true, "exactly enough completed XP is ready")
-equal(X.window.progress.text, "READY TO LEVEL", "ready header")
-equal(X.window.remaining.text, "Turn in quests for Level 11", "turn-in prompt names next level")
+equal(X.window.ready:IsShown(), true, "ready header")
+equal(X.window.progress.text, "150 / 1000 (15.0%)", "bar totals remain visible when ready")
+equal(X.window.remaining.text, "850 XP to next level", "remaining XP without turn-in prompt")
 X.window.scripts.OnUpdate(X.window, 0.1)
 xp = 200
 X.db.profile.compact = true
@@ -304,7 +313,7 @@ X.db.profile.compact = false
 xp = 100
 X:RefreshDisplay()
 equal(X.window.questReady, false, "readiness clears below threshold")
-equal(X.window.progress.text, "10.0%", "ordinary progress restored")
+equal(X.window.progress.text, "100 / 1000 (10.0%)", "ordinary progress")
 equal(X.window.remaining.text, "900 XP to next level", "remaining XP restored")
 X.db.profile.showCompletedQuestBar = false
 X:RefreshDisplay()
@@ -332,4 +341,79 @@ X:RefreshDisplay()
 equal(X:GetSnapshot().completedQuestXP, 0, "no quest XP at cap")
 equal(X.window.questBar:IsShown(), false, "cap hides gold")
 equal(X.window.questReady, false, "cap suppresses ready indicator")
-print("PASS: " .. passed .. " regression assertions")
+level, xp, maxXP = 30, 100, 1000
+questLog = {{ title = "The Carevin Family", id = 1042 }}
+equal(M.CompletedQuestXP(30), 250, "Carevin ready without completion flag or objectives")
+questLog[1].complete = -1
+equal(M.CompletedQuestXP(30), 0, "failed talk quest excluded")
+questLog = {{ title = "Other", id = 11 }}
+C_QuestLog = { GetQuestObjectives = function() return {{text="Wolves slain: 10/10",finished=true}} end }
+equal(M.CompletedQuestXP(10), 850, "finished objectives count before completion flag")
+C_QuestLog.GetQuestObjectives = function() return {{text="Wolves slain: 9/10",finished=false}} end
+equal(M.CompletedQuestXP(10), 0, "unfinished objectives excluded")
+C_QuestLog.GetQuestObjectives = function() return {} end
+equal(M.CompletedQuestXP(10), 0, "unknown empty quest is not assumed ready")
+C_QuestLog.GetQuestObjectives = function() return nil end
+equal(M.CompletedQuestXP(10), 0, "uncached objectives are not ready")
+questLog = {{title="Hidden modern quest",id=1042}}
+C_QuestLog.GetNumQuestLogEntries = function() return 0 end
+C_QuestLog.GetInfo = function(index)
+    if index == 1 then return {title="Zone",isHeader=true,isCollapsed=true} end
+    if index == 2 then return {title="The Carevin Family",questID=1042} end
+end
+equal(M.CompletedQuestXP(30), 250, "structured quest log includes hidden entries")
+C_QuestLog = nil
+-- Simulate an update arriving during our guarded scan: timed refresh repairs it.
+X.questScanInProgress = true
+X.questXPDirty = false
+X.questXPLevel = 30
+X.questXPStamp = now
+X.completedQuestXP = 0
+X:QUEST_LOG_UPDATE()
+now = now + 2
+equal(X:GetSnapshot().completedQuestXP, 250, "missed event cannot leave zero cached indefinitely")
+questLog = {}
+now = now + 2
+equal(X:GetSnapshot().completedQuestXP, 0, "turn-in removes pending XP on refresh")
+-- Generated metadata covers every supported XP-table quest without ID branches.
+C_QuestLog = nil
+local savedMoney = money
+money = 100000000
+local covered, turnIns = 0, 0
+for id, metadata in pairs(XPTrackerProQuestRequirements) do
+    covered = covered + 1
+    assert(XPTrackerProQuestXP[id], "metadata must have an XP-table entry")
+    if metadata[1] == 1 then
+        turnIns = turnIns + 1
+        assert(M.QuestReady(id, nil) == true, "generated turn-in-only detection")
+        assert(M.QuestReady(id, -1) == false, "failed quests never ready")
+        if metadata[2] > 0 then
+            money = metadata[2] - 1
+            assert(M.QuestReady(id, nil) == false, "money requirement enforced")
+            money = metadata[2]
+            assert(M.QuestReady(id, nil) == true, "exact required money sufficient")
+            money = 100000000
+        end
+    end
+end
+equal(covered, 3494, "all supported quest requirements generated")
+equal(turnIns, 693, "turn-in-only coverage is data-driven")
+equal(M.QuestReady(999999, nil), nil, "missing metadata stays unknown")
+equal(M.QuestReady(11, nil), nil, "missing objective data stays unknown")
+C_QuestLog = {GetQuestObjectives = function() return {} end}
+equal(M.QuestReady(11, nil), nil, "empty API data cannot complete a kill quest")
+equal(M.QuestReady(28, nil), false, "scripted quest needs authoritative completion")
+equal(M.QuestReady(28, 1), true, "native completion handles scripted quests")
+C_QuestLog.GetQuestObjectives = function() return {{text="",finished=true}} end
+equal(M.QuestReady(11, nil), nil, "blank objective data is unknown")
+C_QuestLog.GetQuestObjectives = function() return {{text="Done",finished=true}} end
+equal(M.QuestReady(12, nil), nil, "partially loaded objectives cannot complete quest")
+C_QuestLog.GetRequiredMoney = function() return money + 1 end
+equal(M.QuestReady(1042, 1), false, "live money requirement checked before completion")
+C_QuestLog.GetRequiredMoney = function() return nil end
+equal(M.QuestReady(1042, nil), true, "metadata handles unavailable live money")
+C_QuestLog.GetQuestObjectives = function() return {{text="Not done",finished=false}} end
+equal(M.QuestReady(1042, nil), false, "live unfinished objective overrides turn-in-only metadata")
+C_QuestLog = nil
+money = savedMoney
+print("PASS: " .. passed .. " regression assertions; all " .. turnIns .. " generated turn-in-only quests checked")
